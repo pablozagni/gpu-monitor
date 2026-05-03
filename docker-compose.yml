@@ -1,0 +1,14 @@
+services:
+  gpu-monitor:
+    build: .
+    container_name: gpu-monitor
+    restart: unless-stopped
+    ports:
+      - "5001:5001"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu, utility]

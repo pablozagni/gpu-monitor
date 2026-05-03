@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GPU Monitor — Ultron</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  :root {
+    --bg: #0f0f11; --surface: #1a1a1f; --surface2: #222228;
+    --border: #2e2e38; --text: #e8e8f0; --muted: #888899;
+    --green: #1D9E75; --green-light: #9FE1CB; --green-dim: rgba(29,158,117,0.15);
+    --pink: #D4537E; --pink-dim: rgba(212,83,126,0.15);
+    --blue: #378ADD; --blue-dim: rgba(55,138,221,0.15);
+    --amber: #EF9F27; --red: #E24B4A;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; padding: 20px; min-height: 100vh; }
+  h1 { font-size: 15px; font-weight: 500; color: var(--text); }
+  .sub { font-size: 12px; color: var(--muted); margin-top: 3px; }
+  header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+  .status { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.3} }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 20px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+  .card-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+  .card-value { font-size: 26px; font-weight: 600; line-height: 1; }
+  .card-unit { font-size: 13px; font-weight: 400; color: var(--muted); margin-left: 2px; }
+  .card-sub { font-size: 11px; color: var(--muted); margin-top: 5px; }
+  .c-green { color: var(--green); }
+  .c-pink  { color: var(--pink); }
+  .c-blue  { color: var(--blue); }
+  .c-amber { color: var(--amber); }
+  .c-red   { color: var(--red); }
+  .section { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; margin-bottom: 14px; }
+  .section-title { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); margin-bottom: 14px; }
+  .bar-row { margin-bottom: 12px; }
+  .bar-meta { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 5px; }
+  .bar-name { color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .bar-val  { color: var(--text); font-weight: 500; }
+  .bar-track { background: var(--surface2); border-radius: 4px; height: 10px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 4px; transition: width 0.7s ease; }
+  .badge { font-size: 10px; padding: 1px 6px; border-radius: 99px; }
+  .badge-green { background: #0F6E56; color: #9FE1CB; }
+  .badge-pink  { background: #72243E; color: #F4C0D1; }
+  .badge-gray  { background: #3a3a45; color: #aaa; }
+  .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+  @media(max-width:600px){ .charts { grid-template-columns: 1fr; } }
+  .chart-wrap { position: relative; height: 140px; }
+  .proc-table { width: 100%; border-collapse: collapse; }
+  .proc-table th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); text-align: left; padding: 0 0 8px; border-bottom: 1px solid var(--border); }
+  .proc-table th:last-child, .proc-table td:last-child { text-align: right; }
+  .proc-table td { padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; color: var(--text); }
+  .proc-table tr:last-child td { border-bottom: none; }
+  .no-proc { color: var(--muted); font-size: 13px; text-align: center; padding: 16px 0; }
+  .temp-ok   { color: var(--green); }
+  .temp-warm { color: var(--amber); }
+  .temp-hot  { color: var(--red); }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1 id="gpu-name">RTX 5070 — Ultron</h1>
+    <div class="sub" id="gpu-sub">12 GB GDDR7 · cargando...</div>
+  </div>
+  <div class="status">
+    <span class="dot"></span>
+    <span id="last-update">—</span>
+  </div>
+</header>
+
+<div class="cards">
+  <div class="card">
+    <div class="card-label">Temperatura</div>
+    <div class="card-value"><span id="temp" class="c-green">—</span><span class="card-unit">°C</span></div>
+    <div class="card-sub" id="temp-sub">—</div>
+  </div>
+  <div class="card">
+    <div class="card-label">GPU Util.</div>
+    <div class="card-value"><span id="util-gpu" class="c-blue">—</span><span class="card-unit">%</span></div>
+    <div class="card-sub">compute</div>
+  </div>
+  <div class="card">
+    <div class="card-label">VRAM usada</div>
+    <div class="card-value"><span id="vram-used" class="c-pink">—</span><span class="card-unit">MB</span></div>
+    <div class="card-sub" id="vram-pct">de 12227 MB</div>
+  </div>
+  <div class="card">
+    <div class="card-label">VRAM libre</div>
+    <div class="card-value"><span id="vram-free" class="c-green">—</span><span class="card-unit">MB</span></div>
+    <div class="card-sub">disponible</div>
+  </div>
+  <div class="card">
+    <div class="card-label">Potencia</div>
+    <div class="card-value"><span id="power" class="c-amber">—</span><span class="card-unit">W</span></div>
+    <div class="card-sub" id="power-sub">límite —W</div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">Desglose VRAM</div>
+  <div class="bar-row">
+    <div class="bar-meta"><span class="bar-name">Procesos GPU <span class="badge badge-pink">used</span></span><span class="bar-val" id="b-used">—</span></div>
+    <div class="bar-track"><div class="bar-fill" id="bf-used" style="background:var(--pink);width:0%"></div></div>
+  </div>
+  <div class="bar-row">
+    <div class="bar-meta"><span class="bar-name">Libre <span class="badge badge-green">free</span></span><span class="bar-val" id="b-free">—</span></div>
+    <div class="bar-track"><div class="bar-fill" id="bf-free" style="background:var(--green);width:0%"></div></div>
+  </div>
+</div>
+
+<div class="charts">
+  <div class="section">
+    <div class="section-title">GPU % — historial</div>
+    <div class="chart-wrap"><canvas id="chartUtil" role="img" aria-label="Historial de utilización GPU"></canvas></div>
+  </div>
+  <div class="section">
+    <div class="section-title">VRAM usada — historial</div>
+    <div class="chart-wrap"><canvas id="chartVram" role="img" aria-label="Historial de VRAM usada"></canvas></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">Procesos en GPU</div>
+  <div id="proc-container"><p class="no-proc">Sin procesos activos</p></div>
+</div>
+
+<script>
+const MAX_POINTS = 40;
+const histUtil = Array(MAX_POINTS).fill(null);
+const histVram = Array(MAX_POINTS).fill(null);
+const labels   = Array(MAX_POINTS).fill('');
+
+function makeChart(id, color, unit) {
+  return new Chart(document.getElementById(id), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        data: [...(id === 'chartUtil' ? histUtil : histVram)],
+        borderColor: color,
+        backgroundColor: color.replace(')', ', 0.12)').replace('rgb', 'rgba'),
+        borderWidth: 2, fill: true, tension: 0.4, pointRadius: 0
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      animation: { duration: 500 },
+      plugins: { legend: { display: false }, tooltip: {
+        callbacks: { label: ctx => ctx.parsed.y + unit }
+      }},
+      scales: {
+        x: { display: false },
+        y: {
+          min: 0,
+          ticks: { color: '#888899', font: { size: 11 }, callback: v => v + unit, maxTicksLimit: 4 },
+          grid: { color: 'rgba(255,255,255,0.05)' }
+        }
+      }
+    }
+  });
+}
+
+const chartUtil = makeChart('chartUtil', 'rgb(55,138,221)', '%');
+const chartVram = makeChart('chartVram', 'rgb(212,83,126)', ' MB');
+chartUtil.options.scales.y.max = 100;
+
+function fmt(mb) { return mb >= 1024 ? (mb/1024).toFixed(1)+' GB' : mb+' MB'; }
+
+function tempClass(t) {
+  if (t < 60) return 'temp-ok';
+  if (t < 75) return 'temp-warm';
+  return 'temp-hot';
+}
+
+async function refresh() {
+  try {
+    const r = await fetch('/api/gpu');
+    const data = await r.json();
+    const d = data[0];
+
+    document.getElementById('gpu-name').textContent = d.name + ' — Ultron';
+    document.getElementById('gpu-sub').textContent =
+      `${d.mem_total} MB GDDR7 · Driver 580 · CUDA 13.0`;
+
+    const tempEl = document.getElementById('temp');
+    tempEl.textContent = d.temp;
+    tempEl.className = tempClass(d.temp);
+    document.getElementById('temp-sub').textContent =
+      d.temp < 60 ? 'temperatura normal' : d.temp < 75 ? 'temperatura moderada' : 'temperatura alta';
+
+    document.getElementById('util-gpu').textContent = d.util_gpu;
+    document.getElementById('vram-used').textContent = d.mem_used;
+    document.getElementById('vram-pct').textContent = `${Math.round(d.mem_used/d.mem_total*100)}% de ${d.mem_total} MB`;
+    document.getElementById('vram-free').textContent = d.mem_free;
+    document.getElementById('power').textContent = d.power_draw.toFixed(0);
+    document.getElementById('power-sub').textContent = `límite ${d.power_limit.toFixed(0)}W`;
+
+    const usedPct = (d.mem_used / d.mem_total * 100).toFixed(1);
+    const freePct = (d.mem_free / d.mem_total * 100).toFixed(1);
+    document.getElementById('b-used').textContent = fmt(d.mem_used);
+    document.getElementById('b-free').textContent = fmt(d.mem_free);
+    document.getElementById('bf-used').style.width = usedPct + '%';
+    document.getElementById('bf-free').style.width = freePct + '%';
+
+    histUtil.push(d.util_gpu); histUtil.shift();
+    histVram.push(d.mem_used); histVram.shift();
+    chartUtil.data.datasets[0].data = [...histUtil];
+    chartVram.data.datasets[0].data = [...histVram];
+    chartUtil.update('none');
+    chartVram.update('none');
+
+    const pc = document.getElementById('proc-container');
+    if (d.processes.length === 0) {
+      pc.innerHTML = '<p class="no-proc">Sin procesos activos en GPU</p>';
+    } else {
+      pc.innerHTML = `<table class="proc-table">
+        <thead><tr><th>Proceso</th><th>PID</th><th>VRAM</th></tr></thead>
+        <tbody>${d.processes.map(p => `
+          <tr>
+            <td>${p.name.split('/').pop()}</td>
+            <td style="color:var(--muted)">${p.pid}</td>
+            <td>${fmt(p.mem_mb)}</td>
+          </tr>`).join('')}
+        </tbody></table>`;
+    }
+
+    document.getElementById('last-update').textContent =
+      'actualizado ' + new Date().toLocaleTimeString('es-AR');
+
+  } catch(e) {
+    document.getElementById('last-update').textContent = 'error de conexión';
+  }
+}
+
+refresh();
+setInterval(refresh, 3000);
+</script>
+</body>
+</html>
