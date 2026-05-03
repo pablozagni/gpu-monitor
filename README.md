@@ -65,7 +65,7 @@ Al agregar una nueva GPU, aparece en el dashboard sin cambios.
 
 ## Capturas
 
-> _agregar screenshots aquí_
+![Dashboard](screenshot.png)
 
 ## Licencia
 
